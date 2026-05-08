@@ -1,0 +1,181 @@
+import { useState, useEffect } from 'react';
+import useStore from '../../store/useStore';
+import { Save, ArrowLeft, DollarSign, Activity } from 'lucide-react';
+
+const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
+  const { addProducto, updateProducto } = useStore();
+
+  const [formData, setFormData] = useState({
+    clave_producto: '',
+    descripcion_producto: '',
+    tipo_producto: 'MP',
+    unidad_producto: 'kg',
+    familia_producto: '',
+    costo: 0,
+    moneda: 'MXN',
+  });
+
+  const [loading, setLoading] = useState(false);
+
+  // Sincronizar datos iniciales en edición
+  useEffect(() => {
+    if (mode === 'edit' && initialData) {
+      setFormData({
+        clave_producto: initialData.clave_producto || '',
+        descripcion_producto: initialData.descripcion_producto || '',
+        tipo_producto: initialData.tipo_producto || 'MP',
+        unidad_producto: initialData.unidad_producto || 'kg',
+        familia_producto: initialData.familia_producto || '',
+        costo: initialData.costo || 0,
+        moneda: initialData.moneda || 'MXN',
+      });
+    }
+  }, [mode, initialData]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    const upperValue = ['clave_producto', 'descripcion_producto', 'familia_producto'].includes(name) 
+      ? value.toUpperCase() 
+      : value;
+    
+    setFormData(prev => ({ ...prev, [name]: upperValue }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (mode === 'create') {
+        await addProducto(formData);
+      } else {
+        await updateProducto(initialData.id_producto, formData);
+      }
+      onCancel();
+    } catch (error) {
+      alert('Error al guardar el producto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto w-full space-y-6 animate-fade">
+      {/* HEADER */}
+      <div className="flex items-center justify-between border-b border-slate-300 pb-4">
+        <h1 className="text-xl font-black text-slate-800 uppercase tracking-widest italic">
+          {mode === 'edit' ? 'Actualización de Ficha' : 'Nuevo Registro Técnico'}
+        </h1>
+        <button onClick={onCancel} className="text-xs font-black text-slate-400 hover:text-slate-800 flex items-center gap-2 transition-colors">
+          <ArrowLeft size={16}/> Volver
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="bg-white border border-slate-200 shadow-xl rounded flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200 overflow-hidden">
+        
+        {/* SECCIÓN IDENTIFICACIÓN */}
+        <div className="flex-1 p-8 space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-6 bg-emerald-500"></div>
+            <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">Identificación Base</h3>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nombre del Insumo / Producto</label>
+              <input name="descripcion_producto" required className="w-full bg-slate-50 border border-slate-300 p-3 text-xs font-bold uppercase outline-none focus:border-emerald-500 rounded" value={formData.descripcion_producto} onChange={handleInputChange} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Código Interno</label>
+                <input name="clave_producto" required className="w-full bg-slate-50 border border-slate-300 p-3 text-xs font-mono font-bold uppercase outline-none focus:border-emerald-500 rounded" value={formData.clave_producto} onChange={handleInputChange} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Familia Química</label>
+                <input name="familia_producto" className="w-full bg-slate-50 border border-slate-300 p-3 text-xs font-bold uppercase outline-none focus:border-emerald-500 rounded" value={formData.familia_producto} onChange={handleInputChange} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipo de Registro</label>
+                <select name="tipo_producto" className="w-full bg-white border border-slate-300 p-3 text-xs font-bold uppercase outline-none rounded" value={formData.tipo_producto} onChange={handleInputChange}>
+                  <option value="MP">MATERIA PRIMA (MP)</option>
+                  <option value="PI">PRODUCTO INTERMEDIO (PI)</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Unidad de Medida</label>
+                <select name="unidad_producto" className="w-full bg-white border border-slate-300 p-3 text-xs font-bold uppercase outline-none rounded" value={formData.unidad_producto} onChange={handleInputChange}>
+                  <option value="kg">kg</option>
+                  <option value="L">L</option>
+                  <option value="unidad">Unidad</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+{/* SECCIÓN COSTO ADQUISICIÓN O INFO DE PI */}
+        <div className="w-full md:w-80 p-8 bg-slate-50/50 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-6 bg-indigo-500"></div>
+            <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em]">Valores Económicos</h3>
+          </div>
+
+          {formData.tipo_producto === 'MP' ? (
+            /* VISTA PARA MATERIA PRIMA */
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="bg-white p-4 rounded border-2 border-emerald-100 shadow-sm">
+                <label className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Costo Adquisición</label>
+                <div className="relative mt-2">
+                  <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-300" size={18}/>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    name="costo" 
+                    className="w-full border-b-2 border-slate-200 p-2 text-xl font-mono font-black text-slate-800 outline-none focus:border-emerald-500 text-right bg-transparent" 
+                    value={formData.costo} 
+                    onChange={(e) => setFormData({...formData, costo: parseFloat(e.target.value) || 0})} 
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Divisa de Compra</label>
+                <select name="moneda" className="w-full bg-white border border-slate-300 p-3 text-xs font-bold outline-none rounded" value={formData.moneda} onChange={handleInputChange}>
+                  <option value="MXN">MXN</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+            </div>
+          ) : (
+            /* VISTA PARA PRODUCTO INTERMEDIO (PI) */
+            <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+              <div className="bg-[#0f172a] p-6 rounded-xl border-b-4 border-indigo-500 shadow-xl text-center">
+                <Activity size={32} className="mx-auto text-indigo-400 mb-4 animate-pulse" />
+                <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest leading-relaxed">
+                  El costo de este producto se define en el apartado de:
+                </p>
+                <p className="text-sm font-black text-white uppercase italic mt-2 underline decoration-indigo-400">
+                  Formulación y Síntesis
+                </p>
+              </div>
+              <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                <p className="text-[9px] text-indigo-600 font-bold uppercase leading-tight">
+                  Nota: El valor se calculará automáticamente sumando ingredientes + factor de proceso (FP).
+                </p>
+              </div>
+            </div>
+          )}
+
+          <button type="submit" disabled={loading} className="w-full bg-slate-900 text-emerald-400 py-5 font-black uppercase text-[10px] tracking-[0.4em] hover:bg-black disabled:opacity-50 transition-all flex items-center justify-center gap-3 mt-10 shadow-lg border border-emerald-950 rounded">
+            <Save size={18} /> 
+            {loading ? 'Procesando...' : mode === 'edit' ? 'Actualizar Ficha' : 'Guardar Registro'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default ProductForm;
