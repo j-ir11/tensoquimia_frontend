@@ -39,7 +39,7 @@ const Login = () => {
               </h1>
               <div className="h-1 w-12 bg-slate-200 mx-auto mt-2"></div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] mt-3">
-                Acceso Restringido / Sistema de Síntesis
+                Sistema de Gestión de Laboratorio
               </p>
             </div>
 
@@ -89,8 +89,8 @@ const Login = () => {
           
           <div className="bg-slate-50 p-4 border-t border-slate-100">
             <p className="text-[8px] text-center text-slate-400 font-bold uppercase tracking-widest leading-relaxed">
-              Propiedad de TensoQuimia S.A. de C.V.<br/>
-              Protegido por protocolos de encriptación industrial.
+              Propiedad del mismisimo uriel<br/>
+             
             </p>
           </div>
         </div>
