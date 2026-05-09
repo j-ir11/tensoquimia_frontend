@@ -3,7 +3,8 @@ import useStore from '../../store/useStore';
 import { Save, ArrowLeft, DollarSign, Activity } from 'lucide-react';
 
 const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
-  const { addProducto, updateProducto } = useStore();
+  // Extraemos 'productos' para validar duplicados localmente
+  const { addProducto, updateProducto, productos } = useStore();
 
   const [formData, setFormData] = useState({
     clave_producto: '',
@@ -43,6 +44,29 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // --- LÓGICA DE VALIDACIÓN DE DUPLICADOS ---
+    const claveAValidar = formData.clave_producto.trim().toUpperCase();
+
+    if (mode === 'create') {
+      const existeClave = productos.find(p => p.clave_producto.toUpperCase() === claveAValidar);
+      if (existeClave) {
+        alert(`⚠️ ERROR: YA ESTÁ REGISTRADO UN PRODUCTO CON EL CÓDIGO "${claveAValidar}". Por favor, verifica el catálogo.`);
+        return; // Detiene la ejecución
+      }
+    }
+
+    if (mode === 'edit') {
+      const duplicadoEnOtro = productos.find(
+        p => p.clave_producto.toUpperCase() === claveAValidar && p.id_producto !== initialData.id_producto
+      );
+      if (duplicadoEnOtro) {
+        alert(`⚠️ ERROR: EL CÓDIGO "${claveAValidar}" YA PERTENECE A OTRO PRODUCTO REGISTRADO.`);
+        return; // Detiene la ejecución
+      }
+    }
+    // ------------------------------------------
+
     setLoading(true);
     try {
       if (mode === 'create') {
@@ -52,7 +76,8 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
       }
       onCancel();
     } catch (error) {
-      alert('Error al guardar el producto');
+      console.error(error);
+      alert('Error al guardar el producto. Inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -115,7 +140,8 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
             </div>
           </div>
         </div>
-{/* SECCIÓN COSTO ADQUISICIÓN O INFO DE PI */}
+
+        {/* SECCIÓN COSTO ADQUISICIÓN O INFO DE PI */}
         <div className="w-full md:w-80 p-8 bg-slate-50/50 space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 bg-indigo-500"></div>
