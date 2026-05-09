@@ -11,23 +11,12 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
     tipo_producto: 'MP',
     unidad_producto: 'kg',
     familia_producto: '',
-    costo: '', 
+    costo: '', // Lo inicializamos vacío para que no estorbe el 0
     moneda: 'MXN',
   });
 
   const [loading, setLoading] = useState(false);
-  const [errorToast, setErrorToast] = useState(null);
-
-  // 🔥 EFECTO PARA AUTO-OCULTAR EL TOAST
-  useEffect(() => {
-    if (errorToast) {
-      const timer = setTimeout(() => {
-        setErrorToast(null);
-      }, 5000); // Se quita solo tras 5 segundos
-
-      return () => clearTimeout(timer); // Limpieza si el componente se desmonta
-    }
-  }, [errorToast]);
+  const [errorToast, setErrorToast] = useState(null); // Estado para nuestra alerta personalizada
 
   useEffect(() => {
     if (mode === 'edit' && initialData) {
@@ -56,6 +45,7 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
     e.preventDefault();
     const claveAValidar = formData.clave_producto.trim().toUpperCase();
 
+    // VALIDACIÓN CON ALERTA DE INTERFAZ
     if (mode === 'create') {
       const existe = productos.find(p => p.clave_producto.toUpperCase() === claveAValidar);
       if (existe) {
@@ -66,6 +56,7 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
 
     setLoading(true);
     try {
+      // Aseguramos que el costo sea número antes de enviar, si está vacío enviamos 0
       const dataToSend = { ...formData, costo: parseFloat(formData.costo) || 0 };
       
       if (mode === 'create') {
@@ -84,16 +75,16 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
   return (
     <div className="max-w-5xl mx-auto w-full space-y-6 animate-fade relative">
       
-      {/* TOAST CON ANIMACIÓN DE SALIDA */}
+      {/* ALERTA PERSONALIZADA (TOAST) */}
       {errorToast && (
-        <div className="fixed top-10 right-10 z-50 animate-in slide-in-from-right fade-in duration-300">
+        <div className="fixed top-10 right-10 z-50 animate-in slide-in-from-right duration-300">
           <div className="bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl border-l-8 border-red-800 flex items-center gap-4">
             <AlertCircle size={24} />
             <div>
               <p className="text-[10px] uppercase font-black opacity-80">Error de Registro</p>
               <p className="text-sm font-bold">{errorToast}</p>
             </div>
-            <button onClick={() => setErrorToast(null)} className="ml-4 hover:bg-red-700 p-1 rounded transition-colors">
+            <button onClick={() => setErrorToast(null)} className="ml-4 hover:bg-red-700 p-1 rounded">
               <X size={18} />
             </button>
           </div>
@@ -171,7 +162,7 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
                     type="number" 
                     step="0.01" 
                     name="costo" 
-                    placeholder="0.00" 
+                    placeholder="0.00" // El 0 ahora es solo una imagen/texto guía
                     className="w-full border-b-2 border-slate-200 p-2 text-xl font-mono font-black text-slate-800 outline-none focus:border-emerald-500 text-right bg-transparent" 
                     value={formData.costo} 
                     onChange={(e) => setFormData({...formData, costo: e.target.value})} 

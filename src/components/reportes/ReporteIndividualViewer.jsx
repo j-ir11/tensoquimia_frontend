@@ -55,11 +55,19 @@ const ReporteIndividualViewer = () => {
       });
       
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calculamos el alto de la imagen proporcional al ancho de la página
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      // Lógica de centrado: (Altura total página - Altura imagen) / 2
+      // Si la imagen es más alta que la página, empezamos en 0
+      const positionY = Math.max(0, (pdfHeight - imgHeight) / 2);
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, 'PNG', 0, positionY, pdfWidth, imgHeight);
       pdf.save(`Reporte_Operaciones_${reportData.master.clave_producto}.pdf`);
     } catch (error) {
       console.error("Error al generar PDF:", error);
@@ -113,12 +121,12 @@ const ReporteIndividualViewer = () => {
 
       {loading && <div className="flex justify-center p-20"><Loader2 className="animate-spin text-slate-400" size={40}/></div>}
 
-      {/* ÁREA DE REPORTE (FORMATO EXCEL ESTRICTO) */}
+      {/* ÁREA DE REPORTE */}
       {reportData && !loading && (
         <div className="bg-slate-200 p-10 overflow-x-auto">
           <div 
             id="reporte-tecnico" 
-            className="bg-white p-[15mm] mx-auto w-[210mm] shadow-2xl"
+            className="bg-white p-[15mm] mx-auto w-[297mm] shadow-2xl"
             style={{ color: '#000000', backgroundColor: '#ffffff' }}
           >
             <style>{`
