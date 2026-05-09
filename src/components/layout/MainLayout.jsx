@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { 
   Menu, FlaskConical, LayoutDashboard, Beaker, 
   PlusCircle, History as HistoryIcon, Edit3, TrendingUp, 
-  FileText, FileStack, AlertTriangle, Check, X 
+  FileText, FileStack, AlertTriangle, Check, X, LogOut 
 } from 'lucide-react';
 import useStore from '../../store/useStore';
 
@@ -10,13 +10,11 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isEditingTc, setIsEditingTc] = useState(false);
   const [tempTc, setTempTc] = useState(18.00);
-  
-  // Estado para el Modal de Confirmación
   const [showTcModal, setShowTcModal] = useState(false);
 
-  const { tcActual, actualizarTipoCambio } = useStore();
+  // Traemos el usuario y logout del store
+  const { tcActual, actualizarTipoCambio, user, logout } = useStore();
 
-  // Resolución del valor actual del TC
   const tcValue = typeof tcActual === 'number' 
     ? tcActual 
     : (tcActual?.valor || tcActual?.value || 18.00);
@@ -30,14 +28,20 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
     const newValue = parseFloat(tempTc);
     const oldValue = parseFloat(tcValue);
 
-    // Si no es un número o es el mismo valor, cerramos sin hacer nada
     if (isNaN(newValue) || newValue === oldValue) {
       setIsEditingTc(false);
       return;
     }
 
-    // Si el valor cambió, disparamos el modal bonito
-    setShowTcModal(true);
+    // SI ES ADMIN: Mostramos el modal para actualizar BD
+    if (user?.rol === 'ADMIN') {
+      setShowTcModal(true);
+    } else {
+      // SI ES AUXILIAR: Solo actualizamos el estado local (Simulación)
+      // Usamos set del store para cambiar el valor visualmente sin llamar a la API
+      useStore.setState({ tcActual: newValue });
+      setIsEditingTc(false);
+    }
   };
 
   const confirmUpdateTc = () => {
@@ -46,33 +50,37 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
     setIsEditingTc(false);
   };
 
-  const menuItems = [
-    { id: 'dashboard', label: 'DASHBOARD', icon: <LayoutDashboard size={18} /> },
-    { id: 'formulacion', label: 'FORMULACIÓN', icon: <Beaker size={18} /> },
-    { id: 'registro', label: 'NUEVO REGISTRO', icon: <PlusCircle size={18} /> },
-    { id: 'reporte_individual', label: 'FICHA INDIVIDUAL', icon: <FileText size={18} /> },
-    { id: 'reporte_colectivo', label: 'REPORTE COLECTIVO', icon: <FileStack size={18} /> },
-    { id: 'historial', label: 'HISTORIAL', icon: <HistoryIcon size={18} /> },
-    { id: 'grafica_evolucion', label: 'GRAFICAS', icon: <TrendingUp size={18} /> },
+  // --- FILTRADO DE MENÚ POR ROL ---
+  const allMenuItems = [
+    { id: 'dashboard', label: 'DASHBOARD', icon: <LayoutDashboard size={18} />, roles: ['ADMIN'] },
+    { id: 'formulacion', label: 'FORMULACIÓN', icon: <Beaker size={18} />, roles: ['ADMIN'] },
+    { id: 'registro', label: 'NUEVO REGISTRO', icon: <PlusCircle size={18} />, roles: ['ADMIN'] },
+    { id: 'reporte_individual', label: 'FICHA INDIVIDUAL', icon: <FileText size={18} />, roles: ['ADMIN'] },
+    { id: 'reporte_colectivo', label: 'REPORTE COLECTIVO', icon: <FileStack size={18} />, roles: ['ADMIN', 'PRODUCCION'] },
+    { id: 'historial', label: 'HISTORIAL', icon: <HistoryIcon size={18} />, roles: ['ADMIN'] },
+    { id: 'grafica_evolucion', label: 'GRAFICAS', icon: <TrendingUp size={18} />, roles: ['ADMIN'] },
   ];
+
+  // Filtramos los items según el rol del usuario logueado
+  const menuItems = allMenuItems.filter(item => item.roles.includes(user?.rol));
 
   return (
     <div className="flex min-h-screen bg-slate-50 overflow-hidden font-sans">
       
-      {/* MODAL DE CONFIRMACIÓN DE TIPO DE CAMBIO */}
-      {showTcModal && (
+      {/* MODAL DE CONFIRMACIÓN (SOLO PARA ADMIN) */}
+      {showTcModal && user?.rol === 'ADMIN' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm animate-fade">
           <div className="bg-white border-2 border-slate-800 shadow-2xl w-full max-w-md overflow-hidden rounded-2xl mx-4">
             <div className="bg-[#0f172a] p-4 flex items-center gap-3">
               <div className="bg-amber-500/20 p-2 rounded-lg text-amber-500">
                 <AlertTriangle size={20} />
               </div>
-              <h3 className="text-white font-black text-[10px] uppercase tracking-widest italic">Actualización de TC</h3>
+              <h3 className="text-white font-black text-[10px] uppercase tracking-widest italic">Actualización de TC (Base de Datos)</h3>
             </div>
             
             <div className="p-8 text-center">
-              <p className="text-slate-500 text-[10px] font-bold uppercase mb-6 tracking-tight">
-                ¿Deseas registrar este cambio?
+              <p className="text-slate-500 text-[9px] font-black uppercase mb-6 tracking-widest leading-relaxed">
+                ¡Atención Administrador!<br/>Esta acción recalculará los costos de todo el catálogo.
               </p>
               
               <div className="flex justify-center items-center gap-8 mb-8">
@@ -90,16 +98,10 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
               </div>
 
               <div className="flex gap-4">
-                <button 
-                  onClick={() => { setShowTcModal(false); setIsEditingTc(false); }}
-                  className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
-                >
+                <button onClick={() => { setShowTcModal(false); setIsEditingTc(false); }} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
                   <X size={14} /> Cancelar
                 </button>
-                <button 
-                  onClick={confirmUpdateTc}
-                  className="flex-1 px-4 py-3 bg-[#0f172a] text-emerald-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
-                >
+                <button onClick={confirmUpdateTc} className="flex-1 px-4 py-3 bg-[#0f172a] text-emerald-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2">
                   <Check size={14} /> Confirmar
                 </button>
               </div>
@@ -127,6 +129,13 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
             </button>
           ))}
         </nav>
+
+        {/* Botón de Logout al final */}
+        <div className="p-4 border-t border-slate-700">
+          <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded transition-all font-black text-[10px] tracking-widest uppercase italic">
+            <LogOut size={18} /> Cerrar Sesión
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}
@@ -136,14 +145,19 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-600">
               <Menu size={24} />
             </button>
-            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">SISTEMA DE CONTROL</h2>
+            <div>
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">SISTEMA DE CONTROL</h2>
+              <p className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest">{user?.rol} : {user?.nombre}</p>
+            </div>
           </div>
 
-          {/* Tipo de Cambio con Lógica de Pre-Guardado */}
+          {/* Tipo de Cambio Dinámico */}
           <div className={`transition-all duration-300 px-4 py-2 rounded-xl flex items-center gap-3 shadow-sm border ${isEditingTc ? 'bg-emerald-50 border-emerald-300 ring-4 ring-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
             <TrendingUp size={16} className={isEditingTc ? 'text-emerald-500 animate-pulse' : 'text-emerald-600'} />
             <div className="flex flex-col text-right">
-              <span className="text-[7px] font-black text-slate-400 uppercase italic">Exchange Rate</span>
+              <span className="text-[7px] font-black text-slate-400 uppercase italic">
+                {user?.rol === 'ADMIN' ? 'Exchange Rate (DB)' : 'Exchange Rate (Simulación)'}
+              </span>
               <div className="flex items-center gap-2 justify-end">
                 {isEditingTc ? (
                   <input 
@@ -165,11 +179,9 @@ const MainLayout = ({ children, currentView, setCurrentView }) => {
                   </span>
                 )}
                 
-                {!isEditingTc && (
-                  <button onClick={startEditing} className="text-slate-400 hover:text-emerald-600 transition-colors">
-                    <Edit3 size={14} />
-                  </button>
-                )}
+                <button onClick={startEditing} className="text-slate-400 hover:text-emerald-600 transition-colors">
+                  <Edit3 size={14} />
+                </button>
               </div>
             </div>
           </div>

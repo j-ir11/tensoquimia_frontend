@@ -1,23 +1,68 @@
 import { create } from 'zustand';
 import axios from 'axios';
 
-const API_URL = 'https://tensoquimia-backend.vercel.app/api';
+const API_URL = 'http://localhost:5000/api';
 
 const useStore = create((set, get) => ({
-  // --- ESTADO ---
+  // --- ESTADO DE SESIÓN ---
+  user: JSON.parse(localStorage.getItem('user')) || null,
+  token: localStorage.getItem('token') || null,
+
+  // --- ESTADO DE DATOS ---
   productos: [],
   historialVersiones: [],
-  formulas: {}, // Cache de versiones por id_producto
+  formulas: {}, 
   tcActual: 18.00,
   notification: null,
   
   // CONFIGURACIÓN DE API
   api: axios.create({ baseURL: API_URL }),
 
-  // --- ACCIONES INICIALES (LIMPIA) ---
-  initialize: async () => {
+  // --- ACCIONES DE AUTENTICACIÓN ---
+  login: async (credentials) => {
     try {
-      // Ya no pedimos /metodos porque la tabla no existe
+      const res = await get().api.post('/login', credentials);
+      const { token, user } = res.data;
+
+      // Guardamos en persistencia local
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      set({ token, user });
+      
+      // Inicializamos los datos una vez logueado
+      await get().initialize(); 
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || "Error al iniciar sesión" 
+      };
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    set({ 
+      user: null, 
+      token: null, 
+      productos: [], 
+      historialVersiones: [] 
+    });
+    window.location.href = '/'; 
+  },
+
+  // --- ACCIONES INICIALES ---
+  initialize: async () => {
+    // Si no hay token, no intentamos cargar datos (evita errores 403)
+    if (!get().token) return;
+
+    try {
+      // Configuramos el token en los headers antes de las peticiones
+      get().api.defaults.headers.common['Authorization'] = `Bearer ${get().token}`;
+
       const [prodsRes, tcRes] = await Promise.all([
         get().api.get('/productos'),
         get().api.get('/tipo-cambio/actual')
@@ -30,8 +75,12 @@ const useStore = create((set, get) => ({
         tcActual: Number(tcRes.data?.valor) || 18.00
       });
     } catch (error) {
+      // Si el error es 401 (token expirado), cerramos sesión
+      if (error.response?.status === 401) {
+        get().logout();
+      }
       get().setNotification({ 
-        message: "Error de conexión con el servidor", 
+        message: "Error de conexión o sesión expirada", 
         type: "error" 
       });
     }
@@ -80,7 +129,7 @@ const useStore = create((set, get) => ({
     }
   },
 
-  // --- FÓRMULAS Y VERSIONES (ACTUALIZADAS) ---
+  // --- FÓRMULAS Y VERSIONES ---
   loadVersiones: async (id_producto) => {
     try {
       const res = await get().api.get(`/formulas/${id_producto}`);
@@ -105,13 +154,9 @@ const useStore = create((set, get) => ({
 
   createVersionFormula: async (data) => {
     try {
-      // Enviamos el payload tal cual viene del FormulaEditor 
-      // (incluyendo nombre_proceso y factor_proceso manuales)
       const res = await get().api.post('/formulas', data);
-      
       await get().loadVersiones(data.id_producto);
-      await get().initialize(); // Para actualizar los costos de los productos PI
-      
+      await get().initialize(); 
       get().setNotification({ 
         message: "Versión v" + res.data.numero_version + " guardada exitosamente", 
         type: "success" 
@@ -142,7 +187,6 @@ const useStore = create((set, get) => ({
 
   actualizarVersionActual: async (data) => {
     try {
-      // Sobrescribe los datos de la última versión incluyendo los campos de proceso
       const res = await get().api.put(`/formulas/${data.id_producto}`, data);
       await get().initialize(); 
       get().setNotification({ 
@@ -166,10 +210,10 @@ const useStore = create((set, get) => ({
     }
   },
 
-  // --- MOTOR DE COSTOS (HELPER) ---
+  // --- MOTOR DE COSTOS ---
   getCostosBatch: async (ids) => {
     try {
-      const promesas = ids.map(id => get().api.get(`/productos/costo/${id}`));
+      const promesas = ids.map(id => get().api.get(`/productos/${id}/costo`));
       const resultados = await Promise.all(promesas);
       return resultados.reduce((acc, res) => {
         acc[res.data.id_producto] = res.data.costo_calculado;
@@ -181,7 +225,6 @@ const useStore = create((set, get) => ({
     }
   },
 
-  // --- NOTIFICACIONES ---
   setNotification: (notification) => set({ notification }),
   clearNotification: () => set({ notification: null }),
 }));

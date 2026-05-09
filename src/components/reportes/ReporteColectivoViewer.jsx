@@ -5,7 +5,8 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const ReporteColectivoViewer = () => {
-  const { productos, fetchReporteVersion, loadVersiones } = useStore();
+  // 1. Traemos tcActual del store para que la tabla sea reactiva
+  const { productos, fetchReporteVersion, loadVersiones, tcActual } = useStore();
   
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -13,7 +14,9 @@ const ReporteColectivoViewer = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Filtrado de PI con buscador
+  // Resolución del valor real del TC (por si viene como objeto o número)
+  const currentTc = typeof tcActual === 'number' ? tcActual : (tcActual?.valor || 18.00);
+
   const piFiltered = useMemo(() => {
     return productos.filter(p => 
       p.tipo_producto === 'PI' && 
@@ -64,7 +67,7 @@ const ReporteColectivoViewer = () => {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Resumen_Costos.pdf`);
+      pdf.save(`Resumen_Costos_TC_${currentTc.toFixed(2)}.pdf`);
     } catch (error) {
       console.error("Error PDF:", error);
     } finally {
@@ -74,18 +77,21 @@ const ReporteColectivoViewer = () => {
 
   return (
     <div className="space-y-6">
-      {/* SECCIÓN DE SELECCIÓN OPTIMIZADA */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm print:hidden">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-xl font-black text-slate-800 uppercase italic flex items-center gap-3">
             <FileStack className="text-blue-500" /> Selección de Productos
           </h1>
-          <div className="text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full uppercase">
-            {selectedIds.length} Seleccionados
+          <div className="flex items-center gap-4">
+            <div className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-3 py-1 rounded border border-emerald-100 uppercase italic">
+              TC Actual: ${currentTc.toFixed(2)}
+            </div>
+            <div className="text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full uppercase">
+              {selectedIds.length} Seleccionados
+            </div>
           </div>
         </div>
 
-        {/* Buscador */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input 
@@ -97,7 +103,6 @@ const ReporteColectivoViewer = () => {
           />
         </div>
 
-        {/* Tabla de Selección */}
         <div className="border border-slate-200 rounded-lg overflow-hidden mb-6">
           <div className="max-h-64 overflow-y-auto custom-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -151,7 +156,6 @@ const ReporteColectivoViewer = () => {
         </div>
       </div>
 
-      {/* ÁREA DEL REPORTE (4 COLUMNAS ESTRICTAS) */}
       {reportes.length > 0 && !loading && (
         <div className="bg-slate-200 p-8 overflow-x-auto">
           <div id="reporte-colectivo-container" className="bg-white p-[15mm] mx-auto w-[210mm] shadow-2xl">
@@ -162,7 +166,14 @@ const ReporteColectivoViewer = () => {
               .bg-green-excel { background-color: #92d050 !important; font-weight: bold; }
             `}</style>
 
-            <h2 className="text-center font-bold text-lg uppercase mb-10">reporte de resumen de costos de productos</h2>
+            <div className="flex justify-between items-start mb-6">
+               <div className="w-1/4"></div>
+               <h2 className="text-center font-bold text-lg uppercase flex-1">reporte de resumen de costos de productos</h2>
+               <div className="text-[10px] font-bold border border-black p-2 text-right">
+                  TIPO DE CAMBIO APLICADO:<br/>
+                  <span className="text-sm font-mono">${currentTc.toFixed(2)}</span>
+               </div>
+            </div>
 
             <table className="resumen-table">
               <thead>
@@ -174,20 +185,30 @@ const ReporteColectivoViewer = () => {
                 </tr>
               </thead>
               <tbody>
-                {reportes.map((rep, idx) => (
-                  <tr key={idx}>
-                    <td className="text-center font-bold">{rep.master.clave_producto}</td>
-                    <td className="uppercase">{rep.master.descripcion_producto}</td>
-                    <td className="text-right bg-green-excel font-bold">
-                      $ {Number(rep.master.costo_final).toFixed(2)}
-                    </td>
-                    <td className="text-right font-bold">
-                      $ {Number(rep.master.costo_final / (rep.master.tc_valor || 1)).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {reportes.map((rep, idx) => {
+                  const costoMN = Number(rep.master.costo_final);
+                  // Usamos el currentTc reactivo para el cálculo visual en USD
+                  const costoUSD = costoMN / currentTc;
+
+                  return (
+                    <tr key={idx}>
+                      <td className="text-center font-bold">{rep.master.clave_producto}</td>
+                      <td className="uppercase">{rep.master.descripcion_producto}</td>
+                      <td className="text-right bg-green-excel font-bold">
+                        $ {costoMN.toFixed(2)}
+                      </td>
+                      <td className="text-right font-bold">
+                        $ {costoUSD.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            
+            <p className="mt-10 text-[9px] font-bold italic text-slate-500 uppercase">
+              * Nota: Los valores en USD están calculados dinámicamente con base en el tipo de cambio de simulación activo.
+            </p>
           </div>
         </div>
       )}
