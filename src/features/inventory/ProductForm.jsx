@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import useStore from '../../store/useStore';
-import { Save, ArrowLeft, DollarSign, Activity } from 'lucide-react';
+import { Save, ArrowLeft, DollarSign, Activity, AlertCircle, X } from 'lucide-react';
 
 const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
-  // Extraemos 'productos' para validar duplicados localmente
   const { addProducto, updateProducto, productos } = useStore();
 
   const [formData, setFormData] = useState({
@@ -12,13 +11,13 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
     tipo_producto: 'MP',
     unidad_producto: 'kg',
     familia_producto: '',
-    costo: 0,
+    costo: '', // Lo inicializamos vacío para que no estorbe el 0
     moneda: 'MXN',
   });
 
   const [loading, setLoading] = useState(false);
+  const [errorToast, setErrorToast] = useState(null); // Estado para nuestra alerta personalizada
 
-  // Sincronizar datos iniciales en edición
   useEffect(() => {
     if (mode === 'edit' && initialData) {
       setFormData({
@@ -27,7 +26,7 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
         tipo_producto: initialData.tipo_producto || 'MP',
         unidad_producto: initialData.unidad_producto || 'kg',
         familia_producto: initialData.familia_producto || '',
-        costo: initialData.costo || 0,
+        costo: initialData.costo || '',
         moneda: initialData.moneda || 'MXN',
       });
     }
@@ -44,47 +43,54 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // --- LÓGICA DE VALIDACIÓN DE DUPLICADOS ---
     const claveAValidar = formData.clave_producto.trim().toUpperCase();
 
+    // VALIDACIÓN CON ALERTA DE INTERFAZ
     if (mode === 'create') {
-      const existeClave = productos.find(p => p.clave_producto.toUpperCase() === claveAValidar);
-      if (existeClave) {
-        alert(`⚠️ ERROR: YA ESTÁ REGISTRADO UN PRODUCTO CON EL CÓDIGO "${claveAValidar}". Por favor, verifica el catálogo.`);
-        return; // Detiene la ejecución
+      const existe = productos.find(p => p.clave_producto.toUpperCase() === claveAValidar);
+      if (existe) {
+        setErrorToast(`El código "${claveAValidar}" ya está registrado en el sistema.`);
+        return;
       }
     }
-
-    if (mode === 'edit') {
-      const duplicadoEnOtro = productos.find(
-        p => p.clave_producto.toUpperCase() === claveAValidar && p.id_producto !== initialData.id_producto
-      );
-      if (duplicadoEnOtro) {
-        alert(`⚠️ ERROR: EL CÓDIGO "${claveAValidar}" YA PERTENECE A OTRO PRODUCTO REGISTRADO.`);
-        return; // Detiene la ejecución
-      }
-    }
-    // ------------------------------------------
 
     setLoading(true);
     try {
+      // Aseguramos que el costo sea número antes de enviar, si está vacío enviamos 0
+      const dataToSend = { ...formData, costo: parseFloat(formData.costo) || 0 };
+      
       if (mode === 'create') {
-        await addProducto(formData);
+        await addProducto(dataToSend);
       } else {
-        await updateProducto(initialData.id_producto, formData);
+        await updateProducto(initialData.id_producto, dataToSend);
       }
       onCancel();
     } catch (error) {
-      console.error(error);
-      alert('Error al guardar el producto. Inténtalo de nuevo.');
+      setErrorToast('Error de conexión con el servidor. Intente más tarde.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto w-full space-y-6 animate-fade">
+    <div className="max-w-5xl mx-auto w-full space-y-6 animate-fade relative">
+      
+      {/* ALERTA PERSONALIZADA (TOAST) */}
+      {errorToast && (
+        <div className="fixed top-10 right-10 z-50 animate-in slide-in-from-right duration-300">
+          <div className="bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl border-l-8 border-red-800 flex items-center gap-4">
+            <AlertCircle size={24} />
+            <div>
+              <p className="text-[10px] uppercase font-black opacity-80">Error de Registro</p>
+              <p className="text-sm font-bold">{errorToast}</p>
+            </div>
+            <button onClick={() => setErrorToast(null)} className="ml-4 hover:bg-red-700 p-1 rounded">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex items-center justify-between border-b border-slate-300 pb-4">
         <h1 className="text-xl font-black text-slate-800 uppercase tracking-widest italic">
@@ -97,7 +103,6 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
 
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200 shadow-xl rounded flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200 overflow-hidden">
         
-        {/* SECCIÓN IDENTIFICACIÓN */}
         <div className="flex-1 p-8 space-y-8">
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 bg-emerald-500"></div>
@@ -141,7 +146,6 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
           </div>
         </div>
 
-        {/* SECCIÓN COSTO ADQUISICIÓN O INFO DE PI */}
         <div className="w-full md:w-80 p-8 bg-slate-50/50 space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 bg-indigo-500"></div>
@@ -149,7 +153,6 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
           </div>
 
           {formData.tipo_producto === 'MP' ? (
-            /* VISTA PARA MATERIA PRIMA */
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="bg-white p-4 rounded border-2 border-emerald-100 shadow-sm">
                 <label className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Costo Adquisición</label>
@@ -159,9 +162,10 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
                     type="number" 
                     step="0.01" 
                     name="costo" 
+                    placeholder="0.00" // El 0 ahora es solo una imagen/texto guía
                     className="w-full border-b-2 border-slate-200 p-2 text-xl font-mono font-black text-slate-800 outline-none focus:border-emerald-500 text-right bg-transparent" 
                     value={formData.costo} 
-                    onChange={(e) => setFormData({...formData, costo: parseFloat(e.target.value) || 0})} 
+                    onChange={(e) => setFormData({...formData, costo: e.target.value})} 
                   />
                 </div>
               </div>
@@ -175,7 +179,6 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
               </div>
             </div>
           ) : (
-            /* VISTA PARA PRODUCTO INTERMEDIO (PI) */
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
               <div className="bg-[#0f172a] p-6 rounded-xl border-b-4 border-indigo-500 shadow-xl text-center">
                 <Activity size={32} className="mx-auto text-indigo-400 mb-4 animate-pulse" />
@@ -184,11 +187,6 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
                 </p>
                 <p className="text-sm font-black text-white uppercase italic mt-2 underline decoration-indigo-400">
                   Formulación y Síntesis
-                </p>
-              </div>
-              <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                <p className="text-[9px] text-indigo-600 font-bold uppercase leading-tight">
-                  Nota: El valor se calculará automáticamente sumando ingredientes + factor de proceso (FP).
                 </p>
               </div>
             </div>
