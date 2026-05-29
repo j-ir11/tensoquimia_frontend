@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Search, Group, Edit3, Trash2, Plus } from "lucide-react";
+import { Search, Group, Edit3, Trash2, Plus, Download } from "lucide-react"; // Importamos el icono Download
 import useStore from "../../store/useStore";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import * as XLSX from "xlsx"; // Importamos la librería de Excel
 
 const Dashboard = ({ onEdit, setCurrentView }) => {
   const { productos, initialize, tcActual, deleteProducto } = useStore();
@@ -34,6 +35,86 @@ const Dashboard = ({ onEdit, setCurrentView }) => {
 
     return map;
   }, [filtered]);
+
+  // ==========================================
+  // FUNCIÓN PARA EXPORTAR A EXCEL
+  // ==========================================
+  const handleExportExcel = () => {
+    const tc = Number(tcActual || 18);
+    const dataParaExcel = [];
+
+    // Estructuramos las filas dependiendo de si está agrupado por familia o no
+    if (groupByFamily) {
+      Object.entries(families).forEach(([familyName, items]) => {
+        // Opcional: Agregar una fila separadora con el nombre del grupo
+        dataParaExcel.push({
+          "Clave Producto": `--- GRUPO: ${familyName} ---`,
+          "Descripción": "",
+          "Tipo": "",
+          "Costo Base": "",
+          "Moneda": "",
+          "T.C.": "",
+          "Valor (MXN)": ""
+        });
+
+        items.forEach((p) => {
+          const costoBase = parseFloat(p.costo || 0);
+          const valorEnMXN = p.moneda === "USD" 
+            ? parseFloat((costoBase * tc).toFixed(2)) 
+            : parseFloat(costoBase.toFixed(2));
+
+          dataParaExcel.push({
+            "Clave Producto": p.clave_producto?.toUpperCase(),
+            "Descripción": p.descripcion_producto?.toUpperCase(),
+            "Tipo": p.tipo_producto === "MP" ? "MATERIA PRIMA" : "PRODUCTO INTERMEDIO",
+            "Costo Base": costoBase,
+            "Moneda": p.moneda?.toUpperCase(),
+            "T.C.": tc,
+            "Valor (MXN)": valorEnMXN
+          });
+        });
+      });
+    } else {
+      // Vista individual normal (aplica los filtros de búsqueda actuales)
+      filtered.forEach((p) => {
+        const costoBase = parseFloat(p.costo || 0);
+        const valorEnMXN = p.moneda === "USD" 
+          ? parseFloat((costoBase * tc).toFixed(2)) 
+          : parseFloat(costoBase.toFixed(2));
+
+        dataParaExcel.push({
+          "Clave Producto": p.clave_producto?.toUpperCase(),
+          "Descripción": p.descripcion_producto?.toUpperCase(),
+          "Tipo": p.tipo_producto === "MP" ? "MATERIA PRIMA" : "PRODUCTO INTERMEDIO",
+          "Costo Base": costoBase,
+          "Moneda": p.moneda?.toUpperCase(),
+          "T.C.": tc,
+          "Valor (MXN)": valorEnMXN
+        });
+      });
+    }
+
+    // Crear el libro y la hoja de trabajo de Excel
+    const worksheet = XLSX.utils.json_to_sheet(dataParaExcel);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Productos");
+
+    // Ajustar anchos de columnas automáticamente para que se vea ordenado
+    const max_widths = [
+      { wch: 15 }, // Clave
+      { wch: 40 }, // Descripción
+      { wch: 25 }, // Tipo
+      { wch: 12 }, // Costo Base
+      { wch: 10 }, // Moneda
+      { wch: 8 },  // T.C.
+      { wch: 15 }  // Valor MXN
+    ];
+    worksheet["!cols"] = max_widths;
+
+    // Descargar el archivo Excel generado
+    XLSX.writeFile(workbook, `Reporte_Tensoquimia_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+  // ==========================================
 
   const handleDeleteClick = (producto) => {
     setProductToDelete(producto);
@@ -79,54 +160,47 @@ const Dashboard = ({ onEdit, setCurrentView }) => {
           >
             <Group size={14} />
 
-            {groupByFamily
-              ? "Vista Individual"
-              : "Agrupar por Familia"}
+            {groupByFamily ? "Vista Individual" : "Agrupar por Familia"}
           </button>
         </div>
 
-        <button
-          onClick={() => setCurrentView("registro")}
-          className="w-full lg:w-auto px-6 py-2.5 bg-[#0f172a] hover:bg-emerald-600 text-white text-[10px] font-black uppercase rounded-lg shadow-lg hover:shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
-        >
-          <Plus size={16} strokeWidth={3} />
-          Agregar Producto (MP / PI)
-        </button>
+        {/* ACCIONES DE CABECERA (BOTONES) */}
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          {/* NUEVO BOTÓN PARA EXPORTAR EXCEL */}
+          <button
+            onClick={handleExportExcel}
+            className="w-full lg:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black uppercase rounded-lg shadow-lg hover:shadow-emerald-700/20 transition-all flex items-center justify-center gap-2"
+          >
+            <Download size={14} strokeWidth={3} />
+            Exportar Excel
+          </button>
+
+          <button
+            onClick={() => setCurrentView("registro")}
+            className="w-full lg:w-auto px-6 py-2.5 bg-[#0f172a] hover:bg-emerald-600 text-white text-[10px] font-black uppercase rounded-lg shadow-lg hover:shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+          >
+            <Plus size={16} strokeWidth={3} />
+            Agregar Producto (MP / PI)
+          </button>
+        </div>
       </div>
 
       {/* TABLA */}
       <div className="bg-white border border-slate-200 shadow-xl rounded-xl overflow-hidden flex-1 min-h-0">
-        
         {/* SCROLL */}
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-left border-collapse table-fixed">
-            
             {/* HEADER FIJO */}
             <thead className="sticky top-0 z-10 bg-slate-50">
               <tr className="border-b-2 border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                <th className="px-6 py-4 border-r border-slate-100 w-[10%]">
-                  Producto
-                </th>
-
-                <th className="px-6 py-4 w-[35%]">
-                  Descripción
-                </th>
-
-                <th className="px-6 py-4 text-right w-[15%]">
-                  Costo Base
-                </th>
-
-                <th className="px-6 py-4 text-center w-[12%]">
-                  T.C.
-                </th>
-
+                <th className="px-6 py-4 border-r border-slate-100 w-[10%]">Producto</th>
+                <th className="px-6 py-4 w-[35%]">Descripción</th>
+                <th className="px-6 py-4 text-right w-[15%]">Costo Base</th>
+                <th className="px-6 py-4 text-center w-[12%]">T.C.</th>
                 <th className="px-6 py-4 text-right text-emerald-600 bg-emerald-50/20 italic w-[15%]">
                   Valor (MXN)
                 </th>
-
-                <th className="px-6 py-4 text-center w-[13%]">
-                  Acciones
-                </th>
+                <th className="px-6 py-4 text-center w-[13%]">Acciones</th>
               </tr>
             </thead>
 
@@ -183,17 +257,10 @@ const Dashboard = ({ onEdit, setCurrentView }) => {
   );
 };
 
-const DashboardRow = ({
-  producto,
-  tcActual,
-  onEdit,
-  onDelete,
-}) => {
+const DashboardRow = ({ producto, tcActual, onEdit, onDelete }) => {
   const costoBase = parseFloat(producto.costo || 0);
-
   const tc = Number(tcActual || 18);
 
-  // Redondeo matemático estricto a 2 decimales para la conversión de divisas
   const valorEnMXN =
     producto.moneda === "USD"
       ? parseFloat((costoBase * tc).toFixed(2))
@@ -207,34 +274,25 @@ const DashboardRow = ({
 
       <td className="px-6 py-4 uppercase font-bold text-slate-700 tracking-tight truncate">
         {producto.descripcion_producto}
-
         <span className="block text-[9px] text-slate-400 font-normal mt-0.5 italic">
-          {producto.tipo_producto === "MP"
-            ? "MATERIA PRIMA"
-            : "PRODUCTO INTERMEDIO"}
+          {producto.tipo_producto === "MP" ? "MATERIA PRIMA" : "PRODUCTO INTERMEDIO"}
         </span>
       </td>
 
       <td className="px-6 py-4 text-right font-mono text-xs text-slate-400 font-bold">
-        ${costoBase.toFixed(2)}
-
-        <span className="text-[9px] opacity-60 uppercase">
-          ({producto.moneda})
-        </span>
+        ${costoBase.toFixed(2)} <span className="text-[9px] opacity-60 uppercase">({producto.moneda})</span>
       </td>
 
       <td className="px-6 py-4 text-center">
         <div className="inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-          <span className="text-[10px] font-black font-mono text-emerald-600">
-            ${tc.toFixed(2)}
-          </span>
+          <span className="text-[10px] font-black font-mono text-emerald-600">${tc.toFixed(2)}</span>
         </div>
       </td>
 
       <td className="px-6 py-4 text-right bg-emerald-50/10 font-black text-slate-900 font-mono text-base">
         ${valorEnMXN.toLocaleString("es-MX", {
           minimumFractionDigits: 2,
-          maximumFractionDigits: 2, // Se fuerza a un límite máximo estricto en la interfaz
+          maximumFractionDigits: 2,
         })}
       </td>
 
