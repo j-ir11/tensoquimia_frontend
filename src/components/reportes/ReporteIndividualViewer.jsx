@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import useStore from '../../store/useStore';
-import { FileText, Loader2, FileDown, Beaker, DollarSign } from 'lucide-react';
+import { FileText, Loader2, FileDown, Search } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const ReporteIndividualViewer = () => {
   const { productos, fetchReporteVersion, loadVersiones } = useStore();
 
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [versiones, setVersiones] = useState([]);
   const [selectedVersionId, setSelectedVersionId] = useState('');
@@ -14,13 +15,38 @@ const ReporteIndividualViewer = () => {
   const [loading, setLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const piList = useMemo(() => productos.filter(p => p.tipo_producto === 'PI'), [productos]);
+  // Filtrado dinámico de la lista de productos
+  const piList = useMemo(() => {
+    return productos.filter(p => {
+      const cumpleTipo = p.tipo_producto === 'PI';
+      if (!searchTerm) return cumpleTipo;
+
+      const term = searchTerm.toLowerCase();
+      const cumpleClave = p.clave_producto?.toLowerCase().includes(term);
+      const cumpleDescripcion = p.descripcion_producto?.toLowerCase().includes(term);
+
+      return cumpleTipo && (cumpleClave || cumpleDescripcion);
+    });
+  }, [productos, searchTerm]);
+
+  // Autoselección cuando queda exactamente 1 resultado
+  useEffect(() => {
+    if (piList.length === 1) {
+      setSelectedProductId(piList[0].id_producto);
+    } else if (piList.length === 0) {
+      setSelectedProductId('');
+    }
+  }, [piList]);
 
   useEffect(() => {
     const getVersions = async () => {
       if (selectedProductId) {
         const data = await loadVersiones(selectedProductId);
         setVersiones(data || []);
+      } else {
+        setVersiones([]);
+        setSelectedVersionId('');
+        setReportData(null);
       }
     };
     getVersions();
@@ -33,6 +59,8 @@ const ReporteIndividualViewer = () => {
         const data = await fetchReporteVersion(selectedVersionId);
         setReportData(data);
         setLoading(false);
+      } else {
+        setReportData(null);
       }
     };
     getFullReport();
@@ -60,11 +88,7 @@ const ReporteIndividualViewer = () => {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      // Calculamos el alto de la imagen proporcional al ancho de la página
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      // Lógica de centrado: (Altura total página - Altura imagen) / 2
-      // Si la imagen es más alta que la página, empezamos en 0
       const positionY = Math.max(0, (pdfHeight - imgHeight) / 2);
 
       pdf.addImage(imgData, 'PNG', 0, positionY, pdfWidth, imgHeight);
@@ -77,6 +101,15 @@ const ReporteIndividualViewer = () => {
     }
   };
 
+  // Función interna para asegurar el formato estricto dd/mm/aaaa
+  const getFormattedDate = () => {
+    const hoy = new Date();
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Los meses van de 0 a 11
+    const anio = hoy.getFullYear();
+    return `${dia}/${mes}/${anio}`;
+  };
+
   return (
     <div className="space-y-6">
       {/* PANEL DE SELECCIÓN */}
@@ -84,14 +117,33 @@ const ReporteIndividualViewer = () => {
         <h1 className="text-xl font-black text-slate-800 uppercase italic mb-6 flex items-center gap-3">
           <FileText className="text-emerald-500" /> Generador de Documentación Técnica
         </h1>
+        
+        {/* BARRA DE BÚSQUEDA */}
+        <div className="mb-4 relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-slate-400" />
+          </div>
+          <input
+            type="text"
+            className="w-full pl-10 p-3 border border-slate-300 rounded-xl font-bold text-xs uppercase outline-none focus:ring-2 ring-emerald-500"
+            placeholder="Buscar producto por nombre o clave..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <select 
             className="p-3 border border-slate-300 rounded-xl font-bold text-xs uppercase outline-none focus:ring-2 ring-emerald-500"
             value={selectedProductId}
             onChange={(e) => setSelectedProductId(e.target.value)}
           >
-            <option value="">-- SELECCIONAR PRODUCTO --</option>
-            {piList.map(p => <option key={p.id_producto} value={p.id_producto}>{p.clave_producto} - {p.descripcion_producto}</option>)}
+            <option value="">-- SELECCIONAR PRODUCTO ({piList.length} encontrados) --</option>
+            {piList.map(p => (
+              <option key={p.id_producto} value={p.id_producto}>
+                {p.clave_producto} - {p.descripcion_producto}
+              </option>
+            ))}
           </select>
 
           <select 
@@ -140,7 +192,12 @@ const ReporteIndividualViewer = () => {
               .text-emerald-excel { color: #065f46 !important; }
             `}</style>
 
-            <div className="space-y-4 font-sans">
+            <div className="space-y-4 font-sans relative">
+              {/* FECHA DEL DÍA EN LA PARTE SUPERIOR IZQUIERDA FORMATEADA DD/MM/AAAA */}
+              <div className="absolute top-0 left-0 text-[10px] font-bold text-slate-600 uppercase">
+                Fecha de Emisión: {getFormattedDate()}
+              </div>
+
               <h2 className="text-center font-bold text-sm uppercase mb-6" style={{ color: '#000' }}>
                 Tabla de Operaciones por Producto
               </h2>

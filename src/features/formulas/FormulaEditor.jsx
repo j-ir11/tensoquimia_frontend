@@ -45,12 +45,28 @@ const FormulaEditor = () => {
 
   const handleFocus = (e) => e.target.select();
 
+  // FUNCIÓN DE REDONDEO ESTRICTO: 0.005 sube, todo lo menor (0.0049...) baja
+  const redondearCostoEstricto = (valor) => {
+    const num = parseFloat(valor);
+    if (isNaN(num) || num < 0) return 0;
+    
+    const multiplicado = num * 100;
+    const parteEntera = Math.floor(multiplicado);
+    const residuoDecimal = multiplicado - parteEntera;
+
+    if (residuoDecimal >= 0.49999) {
+      return parseFloat(((parteEntera + 1) / 100).toFixed(2));
+    } else {
+      return parseFloat((parteEntera / 100).toFixed(2));
+    }
+  };
+
   const formatOnBlur = (value, setter) => {
     const num = parseFloat(value);
     if (isNaN(num) || num < 0) {
       setter("");
     } else {
-      setter(num.toFixed(3));
+      setter(redondearCostoEstricto(num).toFixed(2));
     }
   };
 
@@ -63,18 +79,17 @@ const FormulaEditor = () => {
           const loadedRecipe = data.ingredientes
             ? data.ingredientes.map((ing) => ({
                 id_componente: ing.id_componente,
-                porcentaje: parseFloat(ing.porcentaje).toFixed(3),
+                porcentaje: parseFloat(ing.porcentaje).toFixed(2),
               }))
             : [];
 
           const nProc = data.version.nombre_proceso || "NINGUNO";
-          const fProc = parseFloat(data.version.factor_proceso || 0).toFixed(3);
+          const fProc = parseFloat(data.version.factor_proceso || 0).toFixed(2);
 
           setRecipe(loadedRecipe);
           setNombreProceso(nProc);
           setLocalFP(fProc);
 
-          // Guardar referencia original para el Dirty Check
           setOriginalData({
             recipe: loadedRecipe,
             nombreProceso: nProc,
@@ -85,7 +100,7 @@ const FormulaEditor = () => {
           const esPredefinido =
             predefinidos[nProc.toUpperCase()] !== undefined &&
             Math.abs(predefinidos[nProc.toUpperCase()] - parseFloat(fProc)) <
-              0.0001;
+              0.01;
           setEsManual(!esPredefinido && nProc !== "NINGUNO");
         } else {
           setHasPreviousVersion(false);
@@ -104,7 +119,6 @@ const FormulaEditor = () => {
     loadPrev();
   }, [target, getUltimosIngredientes]);
 
-  // Lógica para detectar si el usuario ha modificado algo
   const isDirty = useMemo(() => {
     if (recipe.length !== originalData.recipe.length) return true;
     const recipeChanged = recipe.some((ing, idx) => {
@@ -130,7 +144,7 @@ const FormulaEditor = () => {
       setEsManual(false);
       const opciones = { NINGUNO: 0, CALOR: 0.5, FRIO: 0.3 };
       setNombreProceso(val);
-      setLocalFP(opciones[val].toFixed(3));
+      setLocalFP(opciones[val].toFixed(2));
     }
   };
 
@@ -150,12 +164,20 @@ const FormulaEditor = () => {
     (sum, item) => sum + (parseFloat(item.porcentaje) || 0),
     0,
   );
-  const esValido = Math.abs(totalPorcentaje - 100) < 0.001;
-  const costoMezcla = recipe.reduce((acc, r) => {
-    const c = costosIngredientes[r.id_componente] || 0;
-    return acc + c * (parseFloat(r.porcentaje || 0) / 100);
-  }, 0);
-  const costoFinalSimulado = costoMezcla + (parseFloat(localFP) || 0);
+  
+  const esValido = Math.abs(totalPorcentaje - 100) < 0.01;
+
+  const costoFinalSimulado = useMemo(() => {
+    const sumaAportesRedondeados = recipe.reduce((acc, r) => {
+      const costoUnit = costosIngredientes[r.id_componente] || 0;
+      const aporteExacto = costoUnit * (parseFloat(r.porcentaje || 0) / 100);
+      const aporteRedondeado = redondearCostoEstricto(aporteExacto);
+      return acc + aporteRedondeado;
+    }, 0);
+
+    const factorProceso = parseFloat(localFP) || 0;
+    return redondearCostoEstricto(sumaAportesRedondeados + factorProceso);
+  }, [recipe, costosIngredientes, localFP]);
 
   const filteredItems = productos.filter(
     (p) =>
@@ -177,10 +199,12 @@ const FormulaEditor = () => {
     setIsSaving(true);
     setShowConfirm(false);
     try {
+      // MANDAMOS EL VALOR FORMATEADO COMO STRING CON DOS DECIMALES FIJOS PARA ROMPER IMPRECISIONES EN BD
       await actualizarVersionActual({
         id_producto: target.id_producto,
         nombre_proceso: nombreProceso.toUpperCase(),
         factor_proceso: parseFloat(localFP) || 0,
+        costo_final: costoFinalSimulado.toFixed(2), // <-- Modificado aquí (.toFixed(2))
         ingredientes: recipe.map((r) => ({
           id_componente: r.id_componente,
           porcentaje: parseFloat(r.porcentaje) || 0,
@@ -198,10 +222,12 @@ const FormulaEditor = () => {
     if (!esValido || isSaving) return;
     setIsSaving(true);
     try {
+      // MANDAMOS EL VALOR FORMATEADO COMO STRING CON DOS DECIMALES FIJOS PARA ROMPER IMPRECISIONES EN BD
       await createVersionFormula({
         id_producto: target.id_producto,
         nombre_proceso: nombreProceso.toUpperCase(),
         factor_proceso: parseFloat(localFP) || 0,
+        costo_final: costoFinalSimulado.toFixed(2), // <-- Modificado aquí (.toFixed(2))
         ingredientes: recipe.map((r) => ({
           id_componente: r.id_componente,
           porcentaje: parseFloat(r.porcentaje) || 0,
@@ -376,7 +402,7 @@ const FormulaEditor = () => {
                       <input
                         className="bg-white border border-slate-300 pl-5 pr-2 py-1.5 rounded text-[10px] font-mono font-black text-indigo-600 w-20 outline-none focus:border-indigo-500 shadow-sm"
                         value={localFP}
-                        placeholder="0.000"
+                        placeholder="0.00"
                         onFocus={handleFocus}
                         onChange={(e) => setLocalFP(e.target.value)}
                         onBlur={() => formatOnBlur(localFP, setLocalFP)}
@@ -394,7 +420,7 @@ const FormulaEditor = () => {
                 Costo Resultante (MN)
               </p>
               <p className="text-2xl font-black text-emerald-600 font-mono italic underline">
-                ${costoFinalSimulado.toFixed(3)}
+                ${costoFinalSimulado.toFixed(2)}
               </p>
             </div>
             <div
@@ -403,7 +429,7 @@ const FormulaEditor = () => {
               <span className="text-[8px] block opacity-60 uppercase mb-0.5">
                 Suma Protocolo
               </span>
-              {totalPorcentaje.toFixed(3)}%
+              {totalPorcentaje.toFixed(2)}%
             </div>
 
             <div className="flex flex-col gap-2">
@@ -524,7 +550,7 @@ const FormulaEditor = () => {
                       </div>
                     </td>
                     <td className="p-5 text-right font-mono text-slate-400 text-xs font-bold">
-                      ${costoUnit.toFixed(3)}
+                      ${costoUnit.toFixed(2)}
                     </td>
                     <td className="p-5">
                       <div className="bg-[#0f172a] rounded-lg p-1.5 flex items-center border border-slate-800 shadow-inner group">
@@ -533,10 +559,9 @@ const FormulaEditor = () => {
                           onFocus={handleFocus}
                           className="w-full bg-transparent py-1 text-center text-sm font-mono font-black text-emerald-400 outline-none"
                           value={r.porcentaje}
-                          placeholder="0.000"
+                          placeholder="0.00"
                           onChange={(e) => {
                             const val = e.target.value;
-                            // Solo permite números y un único punto decimal
                             if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
                               setRecipe(
                                 recipe.map((x) =>
@@ -550,7 +575,7 @@ const FormulaEditor = () => {
                           onBlur={(e) => {
                             const num = parseFloat(e.target.value);
                             const formatted =
-                              isNaN(num) || num < 0 ? "" : num.toFixed(3);
+                              isNaN(num) || num < 0 ? "" : num.toFixed(2);
                             setRecipe(
                               recipe.map((x) =>
                                 x.id_componente === r.id_componente
@@ -566,7 +591,7 @@ const FormulaEditor = () => {
                       </div>
                     </td>
                     <td className="p-5 text-right font-black text-slate-900 font-mono text-base bg-emerald-50/20 underline">
-                      ${aporte.toFixed(3)}
+                      ${redondearCostoEstricto(aporte).toFixed(2)}
                     </td>
                   </tr>
                 );
@@ -580,10 +605,10 @@ const FormulaEditor = () => {
                 <td
                   className={`p-6 text-center font-mono text-base ${esValido ? "text-emerald-400" : "text-amber-400"}`}
                 >
-                  {totalPorcentaje.toFixed(3)}%
+                  {totalPorcentaje.toFixed(2)}%
                 </td>
                 <td className="p-6 text-right font-mono text-xl text-emerald-400 italic">
-                  ${costoFinalSimulado.toFixed(3)}
+                  ${costoFinalSimulado.toFixed(2)}
                 </td>
               </tr>
             </tfoot>

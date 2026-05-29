@@ -193,10 +193,11 @@ const DashboardRow = ({
 
   const tc = Number(tcActual || 18);
 
+  // Redondeo matemático estricto a 2 decimales para la conversión de divisas
   const valorEnMXN =
     producto.moneda === "USD"
-      ? costoBase * tc
-      : costoBase;
+      ? parseFloat((costoBase * tc).toFixed(2))
+      : parseFloat(costoBase.toFixed(2));
 
   return (
     <tr className="hover:bg-emerald-50/30 transition-colors group">
@@ -233,6 +234,7 @@ const DashboardRow = ({
       <td className="px-6 py-4 text-right bg-emerald-50/10 font-black text-slate-900 font-mono text-base">
         ${valorEnMXN.toLocaleString("es-MX", {
           minimumFractionDigits: 2,
+          maximumFractionDigits: 2, // Se fuerza a un límite máximo estricto en la interfaz
         })}
       </td>
 

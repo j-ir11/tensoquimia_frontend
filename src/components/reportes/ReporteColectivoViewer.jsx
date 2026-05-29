@@ -75,6 +75,15 @@ const ReporteColectivoViewer = () => {
     }
   };
 
+  // Función para obtener la fecha de emisión en formato estricto DD/MM/AAAA
+  const getFormattedDate = () => {
+    const hoy = new Date();
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const anio = hoy.getFullYear();
+    return `${dia}/${mes}/${anio}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm print:hidden">
@@ -158,7 +167,7 @@ const ReporteColectivoViewer = () => {
 
       {reportes.length > 0 && !loading && (
         <div className="bg-slate-200 p-8 overflow-x-auto">
-          <div id="reporte-colectivo-container" className="bg-white p-[15mm] mx-auto w-[210mm] shadow-2xl">
+          <div id="reporte-colectivo-container" className="bg-white p-[15mm] mx-auto w-[210mm] shadow-2xl relative">
             <style>{`
               .resumen-table { border: 2px solid black; width: 100%; border-collapse: collapse; }
               .resumen-table th, .resumen-table td { border: 1px solid black; padding: 12px 10px; font-size: 12px; color: black; }
@@ -167,9 +176,15 @@ const ReporteColectivoViewer = () => {
             `}</style>
 
             <div className="flex justify-between items-start mb-6">
-               <div className="w-1/4"></div>
-               <h2 className="text-center font-bold text-lg uppercase flex-1">reporte de resumen de costos de productos</h2>
-               <div className="text-[10px] font-bold border border-black p-2 text-right">
+               {/* CONTENEDOR DE FECHA DE EMISIÓN (SUPERIOR IZQUIERDA) */}
+               <div className="w-1/4 text-[10px] font-bold text-slate-600 uppercase pt-2">
+                 Fecha de Emisión:<br />
+                 <span className="font-mono text-xs">{getFormattedDate()}</span>
+               </div>
+               
+               <h2 className="text-center font-bold text-lg uppercase flex-1 px-4">reporte de resumen de costos de productos</h2>
+               
+               <div className="text-[10px] font-bold border border-black p-2 text-right w-1/4">
                   TIPO DE CAMBIO APLICADO:<br/>
                   <span className="text-sm font-mono">${currentTc.toFixed(2)}</span>
                </div>
@@ -187,7 +202,6 @@ const ReporteColectivoViewer = () => {
               <tbody>
                 {reportes.map((rep, idx) => {
                   const costoMN = Number(rep.master.costo_final);
-                  // Usamos el currentTc reactivo para el cálculo visual en USD
                   const costoUSD = costoMN / currentTc;
 
                   return (

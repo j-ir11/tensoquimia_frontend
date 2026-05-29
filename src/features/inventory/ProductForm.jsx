@@ -18,6 +18,25 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
   const [loading, setLoading] = useState(false);
   const [errorToast, setErrorToast] = useState(null); // Estado para nuestra alerta personalizada
 
+  // Función de redondeo estricto basado en el tercer decimal (>= 0.005 sube, < 0.005 baja)
+  const redondearCosto = (valor) => {
+    const num = parseFloat(valor);
+    if (isNaN(num) || num < 0) return '';
+    
+    // Multiplicamos por 100 para trabajar con la parte entera de los dos primeros decimales
+    const multiplicado = num * 100;
+    const parteEntera = Math.floor(multiplicado);
+    const residuoDecimal = multiplicado - parteEntera;
+
+    // 0.5 en esta escala equivale exactamente a 0.005 en la escala original
+    // Si el residuo es mayor o igual a 0.4999 (tolerancia de punto flotante para 0.5), sumamos 1 para subir
+    if (residuoDecimal >= 0.49999) {
+      return ((parteEntera + 1) / 100).toFixed(2);
+    } else {
+      return (parteEntera / 100).toFixed(2);
+    }
+  };
+
   useEffect(() => {
     if (mode === 'edit' && initialData) {
       setFormData({
@@ -26,7 +45,7 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
         tipo_producto: initialData.tipo_producto || 'MP',
         unidad_producto: initialData.unidad_producto || 'kg',
         familia_producto: initialData.familia_producto || '',
-        costo: initialData.costo || '',
+        costo: initialData.costo ? redondearCosto(initialData.costo) : '', // <-- Aplica el nuevo redondeo estricto al cargar
         moneda: initialData.moneda || 'MXN',
       });
     }
@@ -39,6 +58,12 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
       : value;
     
     setFormData(prev => ({ ...prev, [name]: upperValue }));
+  };
+
+  // Controla el formateo estricto cuando el usuario deja de escribir en el input
+  const handleCostoBlur = () => {
+    const costoFormateado = redondearCosto(formData.costo);
+    setFormData(prev => ({ ...prev, costo: costoFormateado }));
   };
 
   const handleSubmit = async (e) => {
@@ -56,8 +81,9 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
 
     setLoading(true);
     try {
-      // Aseguramos que el costo sea número antes de enviar, si está vacío enviamos 0
-      const dataToSend = { ...formData, costo: parseFloat(formData.costo) || 0 };
+      // Aseguramos que el costo enviado numéricamente pase por la misma función estricta de redondeo
+      const costoFinalValido = formData.costo !== '' ? parseFloat(redondearCosto(formData.costo)) : 0;
+      const dataToSend = { ...formData, costo: costoFinalValido };
       
       if (mode === 'create') {
         await addProducto(dataToSend);
@@ -138,8 +164,6 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Unidad de Medida</label>
                 <select name="unidad_producto" className="w-full bg-white border border-slate-300 p-3 text-xs font-bold uppercase outline-none rounded" value={formData.unidad_producto} onChange={handleInputChange}>
                   <option value="kg">kg</option>
-                  <option value="L">L</option>
-                  <option value="unidad">Unidad</option>
                 </select>
               </div>
             </div>
@@ -160,12 +184,13 @@ const ProductForm = ({ mode = 'create', initialData = null, onCancel }) => {
                   <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-300" size={18}/>
                   <input 
                     type="number" 
-                    step="0.01" 
+                    step="0.001" // <-- Permitimos la entrada de tres decimales en el teclado para que evalúe el tercer dígito
                     name="costo" 
-                    placeholder="0.00" // El 0 ahora es solo una imagen/texto guía
+                    placeholder="0.00" 
                     className="w-full border-b-2 border-slate-200 p-2 text-xl font-mono font-black text-slate-800 outline-none focus:border-emerald-500 text-right bg-transparent" 
                     value={formData.costo} 
                     onChange={(e) => setFormData({...formData, costo: e.target.value})} 
+                    onBlur={handleCostoBlur} 
                   />
                 </div>
               </div>
